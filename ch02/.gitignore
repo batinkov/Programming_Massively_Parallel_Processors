@@ -1,0 +1,5 @@
+vec_add_cpu
+vec_add_openmp
+vec_add_hip
+vec_add_hip_unified
+test_vec_add
