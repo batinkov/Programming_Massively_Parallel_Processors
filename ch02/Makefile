@@ -5,7 +5,7 @@ CFLAGS = -Wall -Wextra -O2 -std=c23 -D_POSIX_C_SOURCE=199309L
 HIPFLAGS = -O2
 NVCCFLAGS = -O2
 LDFLAGS =
-ARGS =
+ARGS ?=
 
 # GPU targets are only included if their compilers are available
 HIP_TARGETS := $(if $(shell which $(HIPCC) 2>/dev/null),vec_add_hip vec_add_hip_unified)

@@ -45,8 +45,14 @@ make run-cuda           # NVIDIA GPU
 # Pass arguments (array size, number of runs)
 make run-cpu ARGS="-n 50000000 -r 10"
 
+# Or export ARGS once to avoid repeating it
+export ARGS='-n 100000000 -r 5'
+make run-cpu
+make run-openmp
+make run-hip
+
 # Control OpenMP thread count
-OMP_NUM_THREADS=4 make run-openmp ARGS="-n 100000000 -r 5"
+OMP_NUM_THREADS=4 make run-openmp
 
 # Run unit tests
 make test

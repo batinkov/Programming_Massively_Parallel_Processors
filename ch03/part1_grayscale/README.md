@@ -56,16 +56,16 @@ Block size is determined by the runtime via `hipOccupancyMaxPotentialBlockSize` 
 make all
 
 # Build and run individual versions
-make run-cpu ARGS="color.jpg -r 20"
-make run-openmp ARGS="color.jpg -r 20"
-make run-hip ARGS="color.jpg -r 20"
-make run-cuda ARGS="color.jpg -r 20"
+make run-cpu ARGS="<PATH_TO_IMAGE> -r 20"
+make run-openmp ARGS="<PATH_TO_IMAGE> -r 20"
+make run-hip ARGS="<PATH_TO_IMAGE> -r 20"
+make run-cuda ARGS="<PATH_TO_IMAGE> -r 20"
 
 # Control OpenMP thread count
-OMP_NUM_THREADS=4 make run-openmp ARGS="color.jpg -r 10"
+OMP_NUM_THREADS=4 make run-openmp ARGS="<PATH_TO_IMAGE> -r 10"
 
-# Or export ARGS to avoid repeating it
-export ARGS="color.jpg -r 20"
+# Or export ARGS once to avoid repeating it
+export ARGS='<PATH_TO_IMAGE> -r 20'
 make run-cpu
 make run-openmp
 make run-hip
