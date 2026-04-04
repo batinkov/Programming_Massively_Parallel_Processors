@@ -14,7 +14,12 @@ Unlike grayscale conversion (part1), blur is **compute-bound**: each output pixe
 - **L3 Cache**: 16 MB
 - **Toolchain**: GCC 15.2 (C23), ROCm 6.4.2 / HIP 6.4
 
-Machine B (RTX 3060) results pending — CUDA version not yet benchmarked.
+### Machine B — Discrete GPU (dedicated VRAM, cloud)
+
+- **CPU**: AMD EPYC 7B12, 64 cores / 128 threads
+- **GPU**: NVIDIA RTX A2000, 6 GB GDDR6
+- **L3 Cache**: 256 MB
+- **Toolchain**: CUDA 13.0
 
 ## Implementations
 
@@ -24,6 +29,7 @@ Machine B (RTX 3060) results pending — CUDA version not yet benchmarked.
 | `blur_cpu.c` | Sequential single-threaded CPU baseline |
 | `blur_openmp.c` | OpenMP parallel CPU version (parallelized over rows) |
 | `blur_hip.cpp` | AMD GPU — naive version, one thread per pixel, no shared memory |
+| `blur_cuda.cu` | NVIDIA GPU — naive version with explicit memory copies |
 
 ### GPU kernel design
 
@@ -39,6 +45,7 @@ Each thread computes one output pixel by looping over the `(2*blur_size+1)²` ne
 ### Memory strategy
 
 - **HIP (integrated GPU)**: `hipHostRegister` for input, `hipMallocManaged` for output — same as part1.
+- **CUDA (discrete GPU)**: `cudaMalloc` + `cudaMemcpy` for both input and output.
 
 ## Building and Running
 
@@ -104,6 +111,22 @@ OMP_NUM_THREADS=4 make run-openmp
 
 Larger patches scale better with threads — 7.4x at 31×31 vs 6.6x at 7×7. The workload becomes more compute-bound, so additional threads have real work to do rather than waiting on memory.
 
+### Machine B — Discrete GPU (RTX A2000, dedicated GDDR6)
+
+| Patch | CPU (ms) | CUDA GPU (ms) | GPU speedup |
+|-------|----------|---------------|-------------|
+| 3×3   | ~446     | 1.6           | 275x        |
+| 5×5   | ~722     | 3.1           | 229x        |
+| 7×7   | ~1,172   | 5.7           | 204x        |
+| 11×11 | ~2,249   | 13.6          | 165x        |
+| 15×15 | ~3,639   | 25.0          | 146x        |
+| 21×21 | ~6,561   | 48.7          | 135x        |
+| 31×31 | ~14,886  | 96.7          | 154x        |
+| 41×41 | ~24,698  | 134.1         | 184x        |
+| 63×63 | ~56,996  | 312.5         | 182x        |
+
+The RTX A2000 achieves 135-275x speedup over the single-threaded CPU on this machine. Copy overhead (~9 ms upload + ~50 ms download) is small relative to compute for larger patches.
+
 ## Key Findings
 
 ### Blur is compute-bound — GPU dominates
@@ -136,7 +159,8 @@ The same hardware, same image, same integrated GPU — but the workload characte
 ### Timing methodology
 
 - **CPU / OpenMP**: `clock_gettime(CLOCK_MONOTONIC)` — wall-clock time. Multiple runs, best time reported.
-- **GPU kernel**: `hipEvent` timestamps on the GPU command stream. Measures actual kernel execution, not CPU-side launch overhead.
+- **GPU kernel**: `hipEvent` / `cudaEvent` timestamps on the GPU command stream. Measures actual kernel execution, not CPU-side launch overhead.
+- **GPU transfers**: `clock_gettime` around `cudaMemcpy` (blocking calls).
 - **Only compute is timed**: Image loading and JPEG writing are excluded from all benchmarks.
 
 ## File Structure
@@ -148,6 +172,7 @@ part2_blur/
   blur_cpu.c          # Sequential CPU version
   blur_openmp.c       # OpenMP parallel version
   blur_hip.cpp        # AMD GPU — naive (no shared memory)
+  blur_cuda.cu        # NVIDIA GPU — naive with explicit copies
   Makefile            # Build system (auto-detects available GPU compilers)
   README.md           # This file
 ```

@@ -14,6 +14,12 @@ Matrix multiplication is **compute-bound** with O(N³) arithmetic on O(N²) data
 - **L3 Cache**: 16 MB
 - **Toolchain**: GCC 15.2 (C23), ROCm 6.4.2 / HIP 6.4
 
+### Machine B — Discrete GPU (dedicated VRAM, cloud)
+
+- **CPU**: AMD EPYC 7B12, 64 cores / 128 threads
+- **GPU**: NVIDIA RTX A2000, 6 GB GDDR6
+- **L3 Cache**: 256 MB
+- **Toolchain**: CUDA 13.0
 
 ## Implementations
 
@@ -122,6 +128,19 @@ Scaling stalls at 4→8 threads (4.1x → 4.2x) due to cache contention on colum
 | 16 | 98 | 21.98 | 39.1x |
 
 Much better scaling — nearly linear up to 8 threads because the transpose eliminates cache contention. The transposed version at 16 threads (22 GFLOPS) is over 5x faster than the naive version at 16 threads (4.2 GFLOPS).
+
+## Results (Machine B)
+
+### CUDA GPU scaling with matrix size
+
+| Size | GPU (ms) | GFLOPS | Speedup vs CPU | Copy overhead |
+|------|----------|--------|----------------|---------------|
+| 512×512 | 0.56 | 478 | 828x | 0.6 + 1.2 ms |
+| 1024×1024 | 4.51 | 476 | 1,822x | 1.7 + 3.6 ms |
+| 2048×2048 | 35.7 | 481 | 1,719x | 6.0 + 13.8 ms |
+| 4096×4096 | 274.4 | 501 | 2,610x | 21.5 + 54.7 ms |
+
+The RTX A2000 maintains ~480-500 GFLOPS consistently across all sizes — over 8x the integrated GPU's 58 GFLOPS. At 4096×4096, the speedup reaches 2,610x over the naive single-threaded CPU. Copy overhead is a small fraction of compute time, unlike memory-bound workloads (grayscale) where copies dominated.
 
 ## Key Findings
 
