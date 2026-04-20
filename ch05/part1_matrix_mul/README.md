@@ -14,7 +14,12 @@ The goal is to reduce global memory traffic by loading tiles of A and B into on-
 - **L3 Cache**: 16 MB
 - **Toolchain**: GCC 15.2 (C23), ROCm 6.4.2 / HIP 6.4
 
-CUDA version for Machine B (discrete GPU) pending.
+### Machine B — Discrete GPU (dedicated VRAM, cloud)
+
+- **CPU**: AMD Ryzen 5 5600X, 6 cores / 12 threads
+- **GPU**: NVIDIA GeForce RTX 3060, 12 GB GDDR6
+- **L3 Cache**: 32 MB
+- **Toolchain**: CUDA 12.1, NVIDIA driver 535.154.05
 
 ## Implementations
 
@@ -22,6 +27,7 @@ CUDA version for Machine B (discrete GPU) pending.
 |------|-------------|
 | `matrix_mul.h` | Shared header: CPU matmul reference, transpose, fill_random, verify, timing, stats (copied from ch03) |
 | `matrix_mul_hip_tiled.cpp` | AMD GPU — tiled kernel with shared memory (TILE_WIDTH = 32) |
+| `matrix_mul_cuda_tiled.cu` | NVIDIA GPU — tiled kernel with shared memory and explicit copies |
 
 ### GPU kernel design
 
@@ -55,9 +61,9 @@ Key details:
 
 ### Memory strategy
 
-Same as ch03 HIP versions on integrated GPU:
-- `hipHostRegister` for input matrices — GPU reads CPU memory directly, no copy
-- `hipMallocManaged` for output — both GPU (write) and CPU (verification) access the same pointer
+Same patterns as the ch03 exercises:
+- **HIP (integrated GPU)**: `hipHostRegister` for inputs, `hipMallocManaged` for output — no copies needed since CPU and GPU share DDR5
+- **CUDA (discrete GPU)**: `cudaMalloc` + `cudaMemcpy` for both inputs and output — required because data must travel over PCIe between CPU RAM and GPU VRAM
 
 ## Building and Running
 
@@ -66,11 +72,12 @@ make all
 
 # Run with different matrix sizes
 make run-hip-tiled ARGS="-n 1024 -r 3"
-make run-hip-tiled ARGS="-n 2048 -r 3"
+make run-cuda-tiled ARGS="-n 1024 -r 3"
 
 # Or export ARGS once
 export ARGS='-n 1024 -r 3'
 make run-hip-tiled
+make run-cuda-tiled
 ```
 
 ## Results (Machine A)
@@ -94,6 +101,23 @@ Naive numbers are taken from the ch03/part3_matrix_mul README (same Machine A, e
 | 2048×2048 | 101.5  | 169.2 | 411x |
 
 The tiled kernel scales up with matrix size — from 95 GFLOPS at N=512 to 169 GFLOPS at N=2048. More work per kernel better amortizes launch overhead and fills the GPU.
+
+## Results (Machine B)
+
+### Tiled CUDA scaling
+
+| Size | Best (ms) | GFLOPS | Speedup vs CPU | Copy overhead (H→D + D→H) |
+|------|-----------|--------|----------------|---------------------------|
+| 512×512   | 0.30   | 883 | 538x   | 0.5 + 0.6 ms   |
+| 1024×1024 | 2.37   | 906 | 1,296x | 2.4 + 1.5 ms   |
+| 2048×2048 | 18.72  | 918 | 2,069x | 11.2 + 5.3 ms  |
+| 4096×4096 | 139.80 | 983 | 2,367x | 46.7 + 20.9 ms |
+
+The tiled CUDA kernel reaches **~980 GFLOPS** on the RTX 3060 at N=4096 — about 7.7% of the card's ~12.7 TFLOPS FP32 peak. Performance keeps climbing with N as larger grids amortize launch and synchronization overhead. Closing this gap would require the optimizations covered in later chapters and production libraries: register-level tiling (each thread computes a 4×4 or 8×8 output block), double-buffered loads, vectorized memory access, and tensor cores for mixed precision.
+
+The speedup vs CPU is much higher here (up to 2,069x) than on Machine A (411x) mainly because Machine B's naive CPU matmul suffers badly from cache thrashing — not because the GPU is fundamentally faster than on Machine A. What's more telling is the absolute GFLOPS: ~920 on the RTX 3060 vs ~170 on the integrated Radeon 860M, a ~5.4x advantage from dedicated GDDR6 and more compute units.
+
+A direct tiled-vs-naive comparison for CUDA isn't included here because the earlier ch03 naive CUDA numbers were measured on a different cloud machine (RTX A2000). To do a proper comparison we'd need to re-run the naive CUDA kernel on this exact machine (RTX 3060).
 
 ## Key Findings
 
@@ -137,6 +161,7 @@ Even though the Radeon 860M shares the same DDR5 as the CPU, tiling brings a cle
 part1_matrix_mul/
   matrix_mul.h                  # Shared header (copied from ch03)
   matrix_mul_hip_tiled.cpp      # AMD GPU — tiled kernel with shared memory
+  matrix_mul_cuda_tiled.cu      # NVIDIA GPU — tiled kernel with explicit copies
   Makefile                      # Build system
   README.md                     # This file
 ```
